@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head><title>Generate Icons</title></head>
+<body>
+<p>Нажми кнопку — иконки скачаются автоматически</p>
+<button onclick="generate()">Сгенерировать иконки</button>
+<canvas id="c"></canvas>
+<script>
+function drawIcon(size) {
+  const c = document.getElementById('c');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+
+  // Background
+  const grad = ctx.createLinearGradient(0, 0, size, size);
+  grad.addColorStop(0, '#7C3AED');
+  grad.addColorStop(1, '#C026D3');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, size, size, size * 0.2);
+  ctx.fill();
+
+  // Music note
+  ctx.fillStyle = 'white';
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth = size * 0.06;
+  ctx.lineCap = 'round';
+
+  const s = size * 0.55;
+  const ox = (size - s) / 2;
+  const oy = (size - s) / 2;
+
+  // Note stem
+  ctx.beginPath();
+  ctx.moveTo(ox + s * 0.65, oy + s * 0.1);
+  ctx.lineTo(ox + s * 0.65, oy + s * 0.72);
+  ctx.stroke();
+
+  // Note head
+  ctx.beginPath();
+  ctx.ellipse(ox + s * 0.48, oy + s * 0.78, s * 0.2, s * 0.14, -0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Flag
+  ctx.beginPath();
+  ctx.moveTo(ox + s * 0.65, oy + s * 0.1);
+  ctx.bezierCurveTo(ox + s * 1.0, oy + s * 0.2, ox + s * 1.0, oy + s * 0.5, ox + s * 0.65, oy + s * 0.55);
+  ctx.stroke();
+
+  return c.toDataURL('image/png');
+}
+
+function download(dataUrl, name) {
+  const a = document.createElement('a');
+  a.href = dataUrl; a.download = name; a.click();
+}
+
+function generate() {
+  // Создаём папку icons через скачивание
+  download(drawIcon(192), 'icon-192.png');
+  setTimeout(() => download(drawIcon(512), 'icon-512.png'), 300);
+  alert('Скачались icon-192.png и icon-512.png\nПомести их в папку spotify-player/icons/');
+}
+</script>
+</body>
+</html>

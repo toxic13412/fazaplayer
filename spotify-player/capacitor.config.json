@@ -1,0 +1,16 @@
+{
+  "appId": "com.violettunes.app",
+  "appName": "VioletTunes",
+  "webDir": "www",
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2500,
+      "launchAutoHide": true,
+      "backgroundColor": "#08080f",
+      "androidSplashResourceName": "splash",
+      "showSpinner": false,
+      "splashFullScreen": true,
+      "splashImmersive": true
+    }
+  }
+}

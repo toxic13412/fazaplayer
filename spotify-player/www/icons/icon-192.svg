@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="192" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#C026D3"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="38" fill="url(#g)"/>
+  <!-- stem -->
+  <line x1="108.96000000000001" y1="49.152" x2="108.96000000000001" y2="104.44800000000001"
+        stroke="white" stroke-width="11" stroke-linecap="round"/>
+  <!-- head -->
+  <ellipse cx="92.54400000000001" cy="111.36000000000001" rx="19.008000000000003" ry="12.96"
+           transform="rotate(-20 92.54400000000001 111.36000000000001)" fill="white"/>
+  <!-- flag -->
+  <path d="M108.96000000000001 49.152 C143.52 61.248000000000005, 143.52 87.168, 108.96000000000001 90.62400000000001"
+        stroke="white" stroke-width="11" stroke-linecap="round" fill="none"/>
+</svg>
