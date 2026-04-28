@@ -23,6 +23,35 @@ function stop() {
   if (intervalId) { clearInterval(intervalId); intervalId = null; }
 }
 
+// Fetch ALL tracks from a direct URL (channel, playlist, artist page)
+async function fetchAllFromUrl(url, maxTracks = 200) {
+  try {
+    const cmd = `yt-dlp --flat-playlist --dump-json --no-warnings -I 1:${maxTracks} "${url}"`;
+    const { stdout } = await execAsync(cmd, { timeout: 120000 });
+    const tracks = [];
+    for (const line of stdout.trim().split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const item = JSON.parse(line);
+        const videoUrl = item.url || (item.id ? `https://www.youtube.com/watch?v=${item.id}` : null);
+        if (videoUrl && item.title) {
+          tracks.push({
+            url: videoUrl,
+            title: item.title,
+            artist: item.uploader || item.channel || 'Unknown',
+            coverUrl: item.thumbnail || null,
+            duration: item.duration || 0,
+          });
+        }
+      } catch(_) {}
+    }
+    return tracks;
+  } catch (e) {
+    console.error(`fetchAllFromUrl error:`, e.message);
+    return [];
+  }
+}
+
 // Fetch latest tracks for an artist from YouTube using yt-dlp
 async function fetchYouTubeTracks(artistName, maxTracks = 5) {
   try {
@@ -178,6 +207,7 @@ module.exports = {
   start,
   stop,
   runCycle,
+  fetchAllFromUrl,
   runOnce: async () => {
     const db = getDb();
     const artists = db.prepare(`SELECT COUNT(*) as cnt FROM watched_artists`).get();

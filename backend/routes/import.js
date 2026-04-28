@@ -4,6 +4,10 @@ const { importByUrl, importByOAuth, getJobStatus } = require('../modules/playlis
 const importScheduler = require('../modules/importScheduler');
 const { getDb } = require('../modules/db');
 const { v4: uuidv4 } = require('uuid');
+const { downloadWithYtDlp, extractMetadata } = require('../modules/importConverter');
+const { insertTrack, trackExistsByArtistTitle } = require('../modules/trackStore');
+const path = require('path');
+const fs = require('fs');
 
 const router = express.Router();
 
@@ -13,6 +17,72 @@ function requireAdminKey(req, res, next) {
   if (!key || key !== expected) return res.status(401).json({ error: 'Unauthorized' });
   next();
 }
+
+// POST /api/import/from-url - Import ALL tracks from URL (channel/playlist/artist)
+router.post('/from-url', requireAdminKey, async (req, res) => {
+  try {
+    const { url, artistName, maxTracks } = req.body;
+    if (!url) return res.status(400).json({ error: 'url is required' });
+    
+    res.json({ status: 'started', message: 'Import started in background' });
+    
+    // Run import in background
+    (async () => {
+      const tracks = await importScheduler.fetchAllFromUrl(url, maxTracks || 200);
+      const outputDir = path.join(__dirname, '..', 'storage', 'tracks');
+      if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+      
+      let downloaded = 0, skipped = 0, failed = 0;
+      
+      for (const trackInfo of tracks) {
+        const cleanTitle = trackInfo.title.replace(/\(official.*?\)/gi, '').replace(/\[.*?\]/g, '').trim();
+        const artist = artistName || trackInfo.artist;
+        
+        if (trackExistsByArtistTitle(artist, cleanTitle)) {
+          console.log(`  ⊘ Skipping duplicate: ${cleanTitle}`);
+          skipped++;
+          continue;
+        }
+        
+        try {
+          console.log(`  ↓ Downloading: ${cleanTitle}`);
+          const filePath = await downloadWithYtDlp(trackInfo.url, outputDir);
+          const metadata = await extractMetadata(filePath);
+          const trackId = uuidv4();
+          insertTrack({
+            id: trackId,
+            title: metadata.title !== 'Unknown' ? metadata.title : cleanTitle,
+            artist: metadata.artist !== 'Unknown' ? metadata.artist : artist,
+            album: metadata.album,
+            genre: metadata.genre,
+            durationSeconds: metadata.durationSeconds || trackInfo.duration,
+            coverUrl: trackInfo.coverUrl,
+            lyrics: null,
+            filePath: `storage/tracks/${path.basename(filePath)}`,
+            fileSizeBytes: fs.statSync(filePath).size,
+            mimeType: 'audio/mpeg',
+            source: 'url-import',
+            sourceUrl: trackInfo.url,
+            uploadedAt: new Date().toISOString(),
+            importedAt: new Date().toISOString(),
+            playCount: 0
+          });
+          console.log(`  ✓ Saved: ${cleanTitle}`);
+          downloaded++;
+        } catch (e) {
+          console.error(`  ✗ Failed: ${cleanTitle}:`, e.message);
+          failed++;
+        }
+      }
+      
+      console.log(`\n=== URL Import completed ===`);
+      console.log(`Downloaded: ${downloaded}, Skipped: ${skipped}, Failed: ${failed}`);
+    })();
+  } catch (error) {
+    console.error('Error starting URL import:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // POST /api/import/run-now - Trigger import cycle immediately
 router.post('/run-now', requireAdminKey, async (req, res) => {

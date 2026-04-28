@@ -125,6 +125,7 @@
     <div class="tabs">
       <div class="tab active" onclick="switchTab('tracks')">🎵 Треки</div>
       <div class="tab" onclick="switchTab('artists')">🎤 Артисты</div>
+      <div class="tab" onclick="switchTab('import')">🔗 Импорт по URL</div>
       <div class="tab" onclick="switchTab('upload')">⬆️ Загрузить</div>
       <div class="tab" onclick="switchTab('search')">🔍 Поиск</div>
     </div>
@@ -160,6 +161,33 @@
       <div class="card">
         <h2>🎤 Отслеживаемые артисты</h2>
         <div id="artistsList"><div class="empty">Загрузка...</div></div>
+      </div>
+    </div>
+
+    <!-- Import by URL Tab -->
+    <div id="tab-import" class="tab-content">
+      <div class="card">
+        <h2>🔗 Импорт по ссылке</h2>
+        <p style="color:#94a3b8;font-size:13px;margin-bottom:16px">
+          Вставь любую ссылку — скачаются <b>все</b> треки из плейлиста, канала или страницы артиста.<br>
+          Поддерживается: YouTube, SoundCloud, VK, Spotify, Яндекс.Музыка и 1000+ других сайтов.
+        </p>
+        <div id="importUrlAlert" class="alert"></div>
+        <input type="text" id="importUrl" placeholder="https://youtube.com/channel/... или https://open.spotify.com/artist/..." />
+        <input type="text" id="importArtistName" placeholder="Имя артиста (необязательно, для метаданных)" />
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <label style="font-size:13px;color:#94a3b8">Макс. треков:</label>
+          <input type="number" id="importMaxTracks" value="50" min="1" max="500" style="width:80px;margin:0" />
+        </div>
+        <button class="btn btn-success" style="width:100%" onclick="importFromUrl()">🚀 Импортировать всё</button>
+        <div style="margin-top:16px;padding:12px;background:#0f0f13;border-radius:8px;font-size:12px;color:#94a3b8">
+          <b style="color:#e2e8f0">Примеры ссылок:</b><br>
+          • YouTube канал: <code>https://youtube.com/@ArtistName</code><br>
+          • YouTube плейлист: <code>https://youtube.com/playlist?list=PLxxx</code><br>
+          • SoundCloud: <code>https://soundcloud.com/artist-name</code><br>
+          • Spotify артист: <code>https://open.spotify.com/artist/xxx</code><br>
+          • VK музыка: <code>https://vk.com/music/artist/xxx</code>
+        </div>
       </div>
     </div>
 
@@ -423,10 +451,31 @@ async function doSearch() {
   } catch(e) { results.innerHTML = '<div class="empty">Ошибка поиска</div>'; }
 }
 
+// Import from URL
+async function importFromUrl() {
+  const url = document.getElementById('importUrl').value.trim();
+  const artistName = document.getElementById('importArtistName').value.trim();
+  const maxTracks = parseInt(document.getElementById('importMaxTracks').value) || 50;
+  if (!url) { showAlert('importUrlAlert', 'Введи ссылку', 'error'); return; }
+  showAlert('importUrlAlert', '⏳ Импорт запущен в фоне... Треки появятся через несколько минут', 'success');
+  try {
+    await fetch(`${BASE_URL}/api/import/from-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+      body: JSON.stringify({ url, artistName, maxTracks })
+    });
+    document.getElementById('importUrl').value = '';
+    setTimeout(() => { loadTracks(); loadStats(); }, 10000);
+    setTimeout(() => { loadTracks(); loadStats(); }, 30000);
+    setTimeout(() => { loadTracks(); loadStats(); }, 60000);
+  } catch(e) { showAlert('importUrlAlert', 'Ошибка: ' + e.message, 'error'); }
+}
+
 // Tabs
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', t.textContent.toLowerCase().includes(name) || (name==='tracks'&&i===0)));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
   document.getElementById('tab-' + name).classList.add('active');
 }
 
