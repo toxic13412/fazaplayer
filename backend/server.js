@@ -92,7 +92,60 @@ app.use('/download', downloadRouter);
 app.use('/admin', adminRouter);
 app.use('/api/import', importRouter);
 
-// ══ ПОИСК ══
+// ══ КЭШИРОВАНИЕ ТРЕКА ПРИ ПРОСЛУШИВАНИИ ══
+// Когда пользователь слушает трек с YouTube — он автоматически сохраняется на сервер
+app.post('/cache-track', async (req, res) => {
+  const { videoId, name, artist, cover } = req.body;
+  if (!videoId) return res.status(400).json({ error: 'videoId required' });
+
+  // Отвечаем сразу, скачивание идёт в фоне
+  res.json({ status: 'caching', videoId });
+
+  (async () => {
+    try {
+      const { trackExistsByArtistTitle, insertTrack } = require('./modules/trackStore');
+      const { downloadWithYtDlp, extractMetadata } = require('./modules/importConverter');
+      const { v4: uuidv4 } = require('uuid');
+      const path = require('path');
+      const fs = require('fs');
+
+      if (name && artist && trackExistsByArtistTitle(artist, name)) {
+        console.log(`[Cache] Already exists: ${artist} - ${name}`);
+        return;
+      }
+
+      const outputDir = path.join(__dirname, 'storage', 'tracks');
+      if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+
+      const url = `https://www.youtube.com/watch?v=${videoId}`;
+      console.log(`[Cache] Downloading: ${name || videoId}`);
+      const filePath = await downloadWithYtDlp(url, outputDir);
+      const metadata = await extractMetadata(filePath);
+
+      insertTrack({
+        id: uuidv4(),
+        title: name || metadata.title,
+        artist: artist || metadata.artist,
+        album: metadata.album,
+        genre: metadata.genre,
+        durationSeconds: metadata.durationSeconds,
+        coverUrl: cover || null,
+        lyrics: null,
+        filePath: `storage/tracks/${path.basename(filePath)}`,
+        fileSizeBytes: fs.statSync(filePath).size,
+        mimeType: 'audio/mpeg',
+        source: 'youtube-cache',
+        sourceUrl: url,
+        uploadedAt: new Date().toISOString(),
+        importedAt: new Date().toISOString(),
+        playCount: 1
+      });
+      console.log(`[Cache] ✓ Saved: ${name || metadata.title}`);
+    } catch (e) {
+      console.error(`[Cache] Failed ${videoId}:`, e.message);
+    }
+  })();
+});
 app.get('/search', async (req, res) => {
   const { q, limit = 20 } = req.query;
   if (!q) return res.status(400).json({ error: 'Query required' });
