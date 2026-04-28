@@ -291,8 +291,7 @@ async function deleteTrack(id) {
 async function loadArtists() {
   const list = document.getElementById('artistsList');
   try {
-    const r = await fetch(`${BASE_URL}/admin/watched-artists`, { headers: { 'x-admin-key': ADMIN_KEY } });
-    const data = await r.json();
+    const r = await fetch(`${BASE_URL}/api/import/watched-artists`, { headers: { 'x-admin-key': ADMIN_KEY } });    const data = await r.json();
     document.getElementById('statArtists').textContent = data.artists?.length || 0;
     if (!data.artists?.length) { list.innerHTML = '<div class="empty">Нет отслеживаемых артистов. Добавь выше!</div>'; return; }
     list.innerHTML = data.artists.map(a => `
@@ -330,7 +329,7 @@ async function addArtist() {
 
 async function deleteArtist(id) {
   if (!confirm('Удалить артиста?')) return;
-  await fetch(`${BASE_URL}/admin/watched-artists/${id}`, { method: 'DELETE', headers: { 'x-admin-key': ADMIN_KEY } });
+  await fetch(`${BASE_URL}/api/import/watched-artists/${id}`, { method: 'DELETE', headers: { 'x-admin-key': ADMIN_KEY } });
   loadArtists();
 }
 

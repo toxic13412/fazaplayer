@@ -1,9 +1,75 @@
 const express = require('express');
 const { getAuthorizationUrl, handleCallback, getSession, revokeSession } = require('../modules/oauthManager');
 const { importByUrl, importByOAuth, getJobStatus } = require('../modules/playlistImporter');
+const importScheduler = require('../modules/importScheduler');
+const { getDb } = require('../modules/db');
+const { v4: uuidv4 } = require('uuid');
 
 const router = express.Router();
 
+function requireAdminKey(req, res, next) {
+  const key = req.headers['x-admin-key'];
+  const expected = process.env.ADMIN_KEY || 'default-admin-key';
+  if (!key || key !== expected) return res.status(401).json({ error: 'Unauthorized' });
+  next();
+}
+
+// POST /api/import/run-now - Trigger import cycle immediately
+router.post('/run-now', requireAdminKey, async (req, res) => {
+  try {
+    const result = await importScheduler.runOnce();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Error running import:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/import/watch-artist - Add artist to watch list
+router.post('/watch-artist', requireAdminKey, (req, res) => {
+  try {
+    const { artistName, platforms } = req.body;
+    if (!artistName || !platforms?.length) {
+      return res.status(400).json({ error: 'artistName and platforms are required' });
+    }
+    const db = getDb();
+    const artistId = uuidv4();
+    db.prepare('INSERT INTO watched_artists (id, name, created_at) VALUES (?, ?, ?)').run(artistId, artistName, new Date().toISOString());
+    const stmt = db.prepare('INSERT INTO watched_artist_platforms (artist_id, platform, identifier) VALUES (?, ?, ?)');
+    platforms.forEach(p => stmt.run(artistId, p, artistName));
+    res.json({ success: true, artistId });
+  } catch (error) {
+    console.error('Error adding watched artist:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/import/watched-artists - List watched artists
+router.get('/watched-artists', requireAdminKey, (req, res) => {
+  try {
+    const db = getDb();
+    const artists = db.prepare(`
+      SELECT wa.id, wa.name as artistName, GROUP_CONCAT(wap.platform) as platformsStr
+      FROM watched_artists wa
+      LEFT JOIN watched_artist_platforms wap ON wa.id = wap.artist_id
+      GROUP BY wa.id
+    `).all();
+    res.json({ artists: artists.map(a => ({ id: a.id, artistName: a.artistName, platforms: a.platformsStr ? a.platformsStr.split(',') : [] })) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/import/watched-artists/:id
+router.delete('/watched-artists/:id', requireAdminKey, (req, res) => {
+  try {
+    const db = getDb();
+    db.prepare('DELETE FROM watched_artists WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 // POST /api/import/playlist-url - Import playlist by URL
 router.post('/playlist-url', async (req, res) => {
   try {

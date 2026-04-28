@@ -175,5 +175,18 @@ async function processArtistPlatform(artist, stats) {
 module.exports = {
   start,
   stop,
-  runCycle
+  runCycle,
+  runOnce: async () => {
+    const result = { checked: 0, downloaded: 0, skipped: 0, errors: {} };
+    const db = getDb();
+    const artists = db.prepare(`
+      SELECT wa.id, wa.name, wap.platform, wap.identifier
+      FROM watched_artists wa
+      JOIN watched_artist_platforms wap ON wa.id = wap.artist_id
+    `).all();
+    result.artistsCount = artists.length;
+    if (!artists.length) return { ...result, message: 'No watched artists configured' };
+    await runCycle();
+    return { success: true, message: `Import cycle completed for ${artists.length} artist(s)` };
+  }
 };
