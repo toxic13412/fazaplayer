@@ -4,8 +4,188 @@ const { insertTrack, trackExistsByArtistTitle } = require('./trackStore');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
+const { exec } = require('child_process');
+const { promisify } = require('util');
 
+const execAsync = promisify(exec);
 let intervalId = null;
+
+function start(intervalMs = 15 * 60 * 1000) {
+  if (intervalMs < 15 * 60 * 1000) intervalMs = 15 * 60 * 1000;
+  console.log(`Starting import scheduler with interval: ${intervalMs / 1000 / 60} minutes`);
+  runCycle().catch(err => console.error('Error in initial import cycle:', err));
+  intervalId = setInterval(() => {
+    runCycle().catch(err => console.error('Error in import cycle:', err));
+  }, intervalMs);
+}
+
+function stop() {
+  if (intervalId) { clearInterval(intervalId); intervalId = null; }
+}
+
+// Fetch latest tracks for an artist from YouTube using yt-dlp
+async function fetchYouTubeTracks(artistName, maxTracks = 5) {
+  try {
+    const query = encodeURIComponent(`${artistName} official audio`);
+    const cmd = `yt-dlp --flat-playlist --dump-json --no-warnings -I 1:${maxTracks} "ytsearch${maxTracks}:${artistName} official audio"`;
+    const { stdout } = await execAsync(cmd, { timeout: 30000 });
+    const tracks = [];
+    for (const line of stdout.trim().split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const item = JSON.parse(line);
+        if (item.id && item.title) {
+          tracks.push({
+            url: `https://www.youtube.com/watch?v=${item.id}`,
+            title: item.title,
+            artist: item.uploader || artistName,
+            coverUrl: item.thumbnail || null,
+            duration: item.duration || 0,
+          });
+        }
+      } catch(_) {}
+    }
+    return tracks;
+  } catch (e) {
+    console.error(`YouTube fetch error for ${artistName}:`, e.message);
+    return [];
+  }
+}
+
+// Fetch from SoundCloud
+async function fetchSoundCloudTracks(artistName, maxTracks = 5) {
+  try {
+    const cmd = `yt-dlp --flat-playlist --dump-json --no-warnings -I 1:${maxTracks} "scsearch${maxTracks}:${artistName}"`;
+    const { stdout } = await execAsync(cmd, { timeout: 30000 });
+    const tracks = [];
+    for (const line of stdout.trim().split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const item = JSON.parse(line);
+        if (item.url && item.title) {
+          tracks.push({
+            url: item.url,
+            title: item.title,
+            artist: item.uploader || artistName,
+            coverUrl: item.thumbnail || null,
+            duration: item.duration || 0,
+          });
+        }
+      } catch(_) {}
+    }
+    return tracks;
+  } catch (e) {
+    console.error(`SoundCloud fetch error for ${artistName}:`, e.message);
+    return [];
+  }
+}
+
+async function runCycle() {
+  const startedAt = new Date().toISOString();
+  console.log(`\n=== Import cycle started at ${startedAt} ===`);
+  const db = getDb();
+  const stats = { tracksChecked: 0, tracksDownloaded: 0, tracksSkipped: 0, errorsByPlatform: {} };
+
+  try {
+    const watchedArtists = db.prepare(`
+      SELECT wa.id, wa.name, wap.platform, wap.identifier
+      FROM watched_artists wa
+      JOIN watched_artist_platforms wap ON wa.id = wap.artist_id
+    `).all();
+
+    if (!watchedArtists.length) { console.log('No watched artists configured'); return; }
+    console.log(`Found ${watchedArtists.length} watched artist-platform combinations`);
+
+    const outputDir = path.join(__dirname, '..', 'storage', 'tracks');
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+
+    for (const artist of watchedArtists) {
+      try {
+        console.log(`\nProcessing ${artist.name} on ${artist.platform}...`);
+        let tracks = [];
+
+        if (artist.platform === 'youtube') {
+          tracks = await fetchYouTubeTracks(artist.name, 5);
+        } else if (artist.platform === 'soundcloud') {
+          tracks = await fetchSoundCloudTracks(artist.name, 5);
+        } else {
+          // VK, Spotify, Yandex — fallback to YouTube search
+          tracks = await fetchYouTubeTracks(artist.name, 3);
+        }
+
+        for (const trackInfo of tracks) {
+          stats.tracksChecked++;
+          const cleanTitle = trackInfo.title.replace(/\(official.*?\)/gi, '').replace(/\[.*?\]/g, '').trim();
+
+          if (trackExistsByArtistTitle(artist.name, cleanTitle)) {
+            console.log(`  ⊘ Skipping duplicate: ${cleanTitle}`);
+            stats.tracksSkipped++;
+            continue;
+          }
+
+          try {
+            console.log(`  ↓ Downloading: ${cleanTitle}`);
+            const filePath = await downloadWithYtDlp(trackInfo.url, outputDir);
+            const metadata = await extractMetadata(filePath);
+            const trackId = uuidv4();
+            insertTrack({
+              id: trackId,
+              title: metadata.title !== 'Unknown' ? metadata.title : cleanTitle,
+              artist: metadata.artist !== 'Unknown' ? metadata.artist : artist.name,
+              album: metadata.album,
+              genre: metadata.genre,
+              durationSeconds: metadata.durationSeconds || trackInfo.duration,
+              coverUrl: trackInfo.coverUrl,
+              lyrics: null,
+              filePath: `storage/tracks/${path.basename(filePath)}`,
+              fileSizeBytes: fs.statSync(filePath).size,
+              mimeType: 'audio/mpeg',
+              source: artist.platform,
+              sourceUrl: trackInfo.url,
+              uploadedAt: new Date().toISOString(),
+              importedAt: new Date().toISOString(),
+              playCount: 0
+            });
+            console.log(`  ✓ Saved: ${cleanTitle}`);
+            stats.tracksDownloaded++;
+          } catch (e) {
+            console.error(`  ✗ Failed: ${cleanTitle}:`, e.message);
+            stats.errorsByPlatform[artist.platform] = (stats.errorsByPlatform[artist.platform] || 0) + 1;
+          }
+        }
+      } catch (e) {
+        console.error(`Error processing ${artist.name}:`, e.message);
+        stats.errorsByPlatform[artist.platform] = (stats.errorsByPlatform[artist.platform] || 0) + 1;
+      }
+    }
+  } catch (e) {
+    console.error('Error in import cycle:', e);
+  } finally {
+    const completedAt = new Date().toISOString();
+    try {
+      db.prepare(`INSERT INTO import_cycle_logs (started_at, completed_at, tracks_checked, tracks_downloaded, tracks_skipped, errors_json) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(startedAt, completedAt, stats.tracksChecked, stats.tracksDownloaded, stats.tracksSkipped, JSON.stringify(stats.errorsByPlatform));
+    } catch(_) {}
+    console.log(`\n=== Import cycle completed ===`);
+    console.log(`Checked: ${stats.tracksChecked}, Downloaded: ${stats.tracksDownloaded}, Skipped: ${stats.tracksSkipped}`);
+    console.log(`Errors by platform:`, stats.errorsByPlatform);
+  }
+
+  return stats;
+}
+
+module.exports = {
+  start,
+  stop,
+  runCycle,
+  runOnce: async () => {
+    const db = getDb();
+    const artists = db.prepare(`SELECT COUNT(*) as cnt FROM watched_artists`).get();
+    if (!artists.cnt) return { success: false, message: 'No watched artists configured. Add artists first!' };
+    const stats = await runCycle();
+    return { success: true, message: `Import completed`, ...stats };
+  }
+};
 
 /**
  * Start the import scheduler
