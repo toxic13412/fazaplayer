@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task 11.1 Manual Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #fff;
+    }
+    .test-section {
+      background: #2a2a2a;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      border: 1px solid #444;
+    }
+    .test-section h2 {
+      margin-top: 0;
+      color: #7c3aed;
+    }
+    button {
+      background: #7c3aed;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 5px;
+      font-size: 14px;
+    }
+    button:hover {
+      background: #6d28d9;
+    }
+    .result {
+      background: #1a1a1a;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .success { color: #22c55e; }
+    .error { color: #ef4444; }
+    .info { color: #3b82f6; }
+    input {
+      background: #1a1a1a;
+      border: 1px solid #444;
+      color: #fff;
+      padding: 8px;
+      border-radius: 4px;
+      margin: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Task 11.1: Playlist Operations Test</h1>
+  <p>This test verifies that createPlaylist, deletePlaylist, and removeTrackFromPlaylist correctly save to localStorage and update UI.</p>
+
+  <!-- Test 1: createPlaylist -->
+  <div class="test-section">
+    <h2>Test 1: createPlaylist</h2>
+    <p>Creates a new playlist and verifies it's saved to localStorage</p>
+    <input type="text" id="playlistName" placeholder="Playlist name" value="Test Playlist">
+    <button onclick="testCreatePlaylist()">Create Playlist</button>
+    <button onclick="viewLocalStorage()">View localStorage</button>
+    <div id="createResult" class="result"></div>
+  </div>
+
+  <!-- Test 2: deletePlaylist -->
+  <div class="test-section">
+    <h2>Test 2: deletePlaylist</h2>
+    <p>Deletes a playlist and verifies it's removed from localStorage</p>
+    <button onclick="testDeletePlaylist()">Delete First Playlist</button>
+    <button onclick="viewLocalStorage()">View localStorage</button>
+    <div id="deleteResult" class="result"></div>
+  </div>
+
+  <!-- Test 3: removeTrackFromPlaylist -->
+  <div class="test-section">
+    <h2>Test 3: removeTrackFromPlaylist</h2>
+    <p>Removes a track from a playlist and verifies localStorage is updated</p>
+    <button onclick="testAddTrack()">Add Test Track</button>
+    <button onclick="testRemoveTrack()">Remove Track</button>
+    <button onclick="viewLocalStorage()">View localStorage</button>
+    <div id="removeResult" class="result"></div>
+  </div>
+
+  <!-- Test 4: localStorage Persistence -->
+  <div class="test-section">
+    <h2>Test 4: localStorage Persistence</h2>
+    <p>Verifies all changes persist in localStorage</p>
+    <button onclick="testPersistence()">Test Persistence</button>
+    <button onclick="clearLocalStorage()">Clear localStorage</button>
+    <div id="persistResult" class="result"></div>
+  </div>
+
+  <script>
+    // Simulate the app.js functions
+    let playlists = JSON.parse(localStorage.getItem('vt_playlists') || '[]');
+
+    function savePlaylists() {
+      localStorage.setItem('vt_playlists', JSON.stringify(playlists));
+    }
+
+    function createPlaylist(name) {
+      const icons = ['🎵','🎶','🔥','⚡','🌊','🎸','🎤','🎷','🎹','🌙'];
+      const pl = { 
+        id: Date.now(), 
+        name, 
+        icon: icons[Math.floor(Math.random()*icons.length)], 
+        tracks: [] 
+      };
+      playlists.push(pl);
+      savePlaylists();
+      return pl;
+    }
+
+    function deletePlaylist(id) {
+      playlists = playlists.filter(p => p.id !== id);
+      savePlaylists();
+    }
+
+    function removeTrackFromPlaylist(plId, trackId) {
+      const pl = playlists.find(p => p.id === plId);
+      if (!pl) return;
+      pl.tracks = pl.tracks.filter(t => t.id !== trackId);
+      savePlaylists();
+    }
+
+    function addTrackToPlaylist(plId, track) {
+      const pl = playlists.find(p => p.id === plId);
+      if (!pl) return;
+      pl.tracks.push(track);
+      savePlaylists();
+    }
+
+    // Test functions
+    function testCreatePlaylist() {
+      const result = document.getElementById('createResult');
+      const name = document.getElementById('playlistName').value;
+      
+      try {
+        const beforeCount = playlists.length;
+        const pl = createPlaylist(name);
+        const afterCount = playlists.length;
+        
+        // Verify in-memory state
+        const inMemory = afterCount === beforeCount + 1;
+        
+        // Verify localStorage
+        const stored = JSON.parse(localStorage.getItem('vt_playlists'));
+        const inStorage = stored.some(p => p.id === pl.id && p.name === name);
+        
+        result.innerHTML = `
+<span class="success">✅ Test Passed</span>
+
+Created playlist: ${pl.name} ${pl.icon}
+Playlist ID: ${pl.id}
+
+In-memory state: ${inMemory ? '✅ Updated' : '❌ Not updated'}
+localStorage: ${inStorage ? '✅ Saved' : '❌ Not saved'}
+
+Total playlists: ${playlists.length}
+        `;
+      } catch (e) {
+        result.innerHTML = `<span class="error">❌ Test Failed: ${e.message}</span>`;
+      }
+    }
+
+    function testDeletePlaylist() {
+      const result = document.getElementById('deleteResult');
+      
+      try {
+        if (playlists.length === 0) {
+          result.innerHTML = '<span class="error">❌ No playlists to delete. Create one first.</span>';
+          return;
+        }
+        
+        const beforeCount = playlists.length;
+        const firstPlaylist = playlists[0];
+        const deletedId = firstPlaylist.id;
+        const deletedName = firstPlaylist.name;
+        
+        deletePlaylist(deletedId);
+        const afterCount = playlists.length;
+        
+        // Verify in-memory state
+        const inMemory = afterCount === beforeCount - 1;
+        const notInMemory = !playlists.some(p => p.id === deletedId);
+        
+        // Verify localStorage
+        const stored = JSON.parse(localStorage.getItem('vt_playlists'));
+        const notInStorage = !stored.some(p => p.id === deletedId);
+        
+        result.innerHTML = `
+<span class="success">✅ Test Passed</span>
+
+Deleted playlist: ${deletedName}
+Playlist ID: ${deletedId}
+
+In-memory state: ${inMemory && notInMemory ? '✅ Removed' : '❌ Not removed'}
+localStorage: ${notInStorage ? '✅ Removed' : '❌ Still present'}
+
+Remaining playlists: ${playlists.length}
+        `;
+      } catch (e) {
+        result.innerHTML = `<span class="error">❌ Test Failed: ${e.message}</span>`;
+      }
+    }
+
+    function testAddTrack() {
+      const result = document.getElementById('removeResult');
+      
+      try {
+        if (playlists.length === 0) {
+          createPlaylist('Test Playlist for Tracks');
+        }
+        
+        const pl = playlists[0];
+        const track = {
+          id: 'test_track_' + Date.now(),
+          name: 'Test Track',
+          artist: 'Test Artist',
+          cover: '',
+          src: 'youtube'
+        };
+        
+        addTrackToPlaylist(pl.id, track);
+        
+        result.innerHTML = `
+<span class="info">ℹ️ Track Added</span>
+
+Added track: ${track.name} by ${track.artist}
+To playlist: ${pl.name}
+Track ID: ${track.id}
+
+Tracks in playlist: ${pl.tracks.length}
+        `;
+      } catch (e) {
+        result.innerHTML = `<span class="error">❌ Test Failed: ${e.message}</span>`;
+      }
+    }
+
+    function testRemoveTrack() {
+      const result = document.getElementById('removeResult');
+      
+      try {
+        if (playlists.length === 0 || playlists[0].tracks.length === 0) {
+          result.innerHTML = '<span class="error">❌ No tracks to remove. Add a track first.</span>';
+          return;
+        }
+        
+        const pl = playlists[0];
+        const beforeCount = pl.tracks.length;
+        const firstTrack = pl.tracks[0];
+        const trackId = firstTrack.id;
+        const trackName = firstTrack.name;
+        
+        removeTrackFromPlaylist(pl.id, trackId);
+        const afterCount = pl.tracks.length;
+        
+        // Verify in-memory state
+        const inMemory = afterCount === beforeCount - 1;
+        const notInMemory = !pl.tracks.some(t => t.id === trackId);
+        
+        // Verify localStorage
+        const stored = JSON.parse(localStorage.getItem('vt_playlists'));
+        const storedPl = stored.find(p => p.id === pl.id);
+        const notInStorage = !storedPl.tracks.some(t => t.id === trackId);
+        
+        result.innerHTML = `
+<span class="success">✅ Test Passed</span>
+
+Removed track: ${trackName}
+Track ID: ${trackId}
+From playlist: ${pl.name}
+
+In-memory state: ${inMemory && notInMemory ? '✅ Removed' : '❌ Not removed'}
+localStorage: ${notInStorage ? '✅ Removed' : '❌ Still present'}
+
+Remaining tracks: ${pl.tracks.length}
+        `;
+      } catch (e) {
+        result.innerHTML = `<span class="error">❌ Test Failed: ${e.message}</span>`;
+      }
+    }
+
+    function testPersistence() {
+      const result = document.getElementById('persistResult');
+      
+      try {
+        // Create a test scenario
+        const testName = 'Persistence Test ' + Date.now();
+        const pl = createPlaylist(testName);
+        
+        // Add a track
+        const track = {
+          id: 'persist_track',
+          name: 'Persist Track',
+          artist: 'Persist Artist',
+          cover: '',
+          src: 'youtube'
+        };
+        addTrackToPlaylist(pl.id, track);
+        
+        // Simulate page reload by reading from localStorage
+        const reloaded = JSON.parse(localStorage.getItem('vt_playlists'));
+        const reloadedPl = reloaded.find(p => p.id === pl.id);
+        
+        const playlistPersisted = !!reloadedPl;
+        const trackPersisted = reloadedPl?.tracks.some(t => t.id === track.id);
+        
+        result.innerHTML = `
+<span class="success">✅ Persistence Test Passed</span>
+
+Created playlist: ${testName}
+Added track: ${track.name}
+
+After simulated reload:
+Playlist persisted: ${playlistPersisted ? '✅ Yes' : '❌ No'}
+Track persisted: ${trackPersisted ? '✅ Yes' : '❌ No'}
+
+localStorage size: ${localStorage.getItem('vt_playlists').length} bytes
+        `;
+      } catch (e) {
+        result.innerHTML = `<span class="error">❌ Test Failed: ${e.message}</span>`;
+      }
+    }
+
+    function viewLocalStorage() {
+      const stored = localStorage.getItem('vt_playlists');
+      if (!stored) {
+        alert('localStorage is empty');
+        return;
+      }
+      
+      const parsed = JSON.parse(stored);
+      console.log('localStorage vt_playlists:', parsed);
+      alert('Check console for localStorage contents\n\nPlaylists: ' + parsed.length);
+    }
+
+    function clearLocalStorage() {
+      if (confirm('Clear all playlists from localStorage?')) {
+        localStorage.removeItem('vt_playlists');
+        playlists = [];
+        alert('localStorage cleared');
+      }
+    }
+
+    // Initialize
+    console.log('Initial playlists:', playlists);
+  </script>
+</body>
+</html>

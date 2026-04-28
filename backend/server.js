@@ -1,14 +1,38 @@
 const express = require('express');
 const cors = require('cors');
 const { Innertube } = require('youtubei.js');
+const { WebSocketServer } = require('ws');
+
+// Import self-hosted music platform modules
+const { getDb } = require('./modules/db');
+const importScheduler = require('./modules/importScheduler');
+
+// Import routes
+const tracksRouter = require('./routes/tracks');
+const searchRouter = require('./routes/search');
+const recommendationsRouter = require('./routes/recommendations');
+const downloadRouter = require('./routes/download');
+const adminRouter = require('./routes/admin');
+const importRouter = require('./routes/import');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+const bridgeConnections = new Map();
 
 app.use(cors());
 app.use(express.json());
 
 let yt = null;
+
+// Initialize database
+getDb();
+console.log('✓ Database initialized');
+
+// Start import scheduler (runs every 15 minutes)
+// NOTE: Requires ffmpeg/yt-dlp - use Railway.app or Render Docker (paid plan)
+importScheduler.start(15 * 60 * 1000);
+console.log('✓ Import scheduler started');
 
 // Инициализация YouTube клиента
 async function initYT() {
@@ -40,6 +64,15 @@ setInterval(async () => {
 app.get('/ping', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
+
+// ══ SELF-HOSTED MUSIC PLATFORM ROUTES ══
+app.use('/api/tracks', tracksRouter);
+app.use('/stream', tracksRouter); // /stream/:id handled by tracks router
+app.use('/api/search', searchRouter);
+app.use('/api', recommendationsRouter); // /api/listen-events, /api/recommendations
+app.use('/download', downloadRouter);
+app.use('/admin', adminRouter);
+app.use('/api/import', importRouter);
 
 // ══ ПОИСК ══
 app.get('/search', async (req, res) => {
@@ -170,6 +203,77 @@ function getBestThumb(thumbnails) {
   return (medium || sorted[0])?.url || '';
 }
 
-app.listen(PORT, () => {
+// ══ DISCORD RPC ══
+app.post('/discord-rpc/event', (req, res) => {
+  const { sessionToken, ...event } = req.body;
+  if (!sessionToken || typeof sessionToken !== 'string' ||
+      sessionToken.length < 8 || sessionToken.length > 64) {
+    return res.status(400).json({ error: 'invalid_token' });
+  }
+  const bridge = bridgeConnections.get(sessionToken);
+  if (!bridge || bridge.readyState !== 1) {
+    return res.status(202).json({ status: 'no_bridge' });
+  }
+  try {
+    bridge.send(JSON.stringify({ type: event.clear ? 'clear' : 'track', ...event }));
+    res.json({ status: 'delivered' });
+  } catch (err) {
+    bridgeConnections.delete(sessionToken);
+    res.status(202).json({ status: 'no_bridge' });
+  }
+});
+
+app.get('/discord-rpc/status/:token', (req, res) => {
+  const { token } = req.params;
+  const bridge = bridgeConnections.get(token);
+  res.json({ connected: !!(bridge && bridge.readyState === 1) });
+});
+
+const server = app.listen(PORT, () => {
   console.log(`VioletTunes backend running on port ${PORT}`);
+});
+
+// ══ DISCORD RPC WebSocket ══
+const wss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (request, socket, head) => {
+  const url = new URL(request.url, `http://${request.headers.host}`);
+  if (url.pathname === '/discord-rpc/ws') {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  } else {
+    socket.destroy();
+  }
+});
+
+wss.on('connection', (ws) => {
+  let registeredToken = null;
+
+  ws.on('message', (data) => {
+    try {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === 'register' && msg.token) {
+        registeredToken = msg.token;
+        bridgeConnections.set(msg.token, ws);
+        console.log(`[Discord RPC] Bridge registered: ${msg.token.slice(0, 4)}****`);
+      } else if (msg.type === 'pong') {
+        // heartbeat ok
+      }
+    } catch (e) {
+      console.error('[Discord RPC] Invalid message:', e.message);
+    }
+  });
+
+  ws.on('close', () => {
+    if (registeredToken) {
+      bridgeConnections.delete(registeredToken);
+      console.log(`[Discord RPC] Bridge disconnected: ${registeredToken.slice(0, 4)}****`);
+    }
+  });
+
+  ws.on('error', (err) => {
+    console.error('[Discord RPC] WS error:', err.message);
+    if (registeredToken) bridgeConnections.delete(registeredToken);
+  });
 });

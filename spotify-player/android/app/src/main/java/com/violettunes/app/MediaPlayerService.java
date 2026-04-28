@@ -10,6 +10,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.PowerManager;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 import android.support.v4.media.MediaMetadataCompat;
@@ -32,6 +33,7 @@ public class MediaPlayerService extends Service {
 
     private MediaSessionCompat mediaSession;
     private NotificationManager notifManager;
+    private PowerManager.WakeLock wakeLock;
 
     @Override
     public void onCreate() {
@@ -39,6 +41,10 @@ public class MediaPlayerService extends Service {
         createNotificationChannel();
         mediaSession = new MediaSessionCompat(this, "VioletTunes");
         mediaSession.setActive(true);
+        
+        // Инициализация WakeLock
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "VioletTunes::MediaWakeLock");
     }
 
     @Override
@@ -56,6 +62,7 @@ public class MediaPlayerService extends Service {
                         loadCoverAndNotify();
                         break;
                     case "STOP":
+                        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
                         stopForeground(true);
                         stopSelf();
                         return START_NOT_STICKY;
@@ -139,6 +146,10 @@ public class MediaPlayerService extends Service {
         if (cover != null) builder.setLargeIcon(cover);
 
         Notification notification = builder.build();
+        
+        // Acquire WakeLock перед startForeground
+        if (wakeLock != null && !wakeLock.isHeld()) wakeLock.acquire();
+        
         startForeground(NOTIF_ID, notification);
     }
 
@@ -170,6 +181,7 @@ public class MediaPlayerService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         if (mediaSession != null) mediaSession.release();
     }
 }

@@ -2,8 +2,30 @@ services:
   - type: web
     name: violettunes-backend
     env: node
+    region: frankfurt
+    plan: free
     buildCommand: npm install
     startCommand: node server.js
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 3000
+      - key: ADMIN_KEY
+        generateValue: true
+      - key: VK_CLIENT_ID
+        sync: false
+      - key: VK_CLIENT_SECRET
+        sync: false
+      - key: SPOTIFY_CLIENT_ID
+        sync: false
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+      - key: YANDEX_CLIENT_ID
+        sync: false
+      - key: YANDEX_CLIENT_SECRET
+        sync: false
+    disk:
+      name: violettunes-data
+      mountPath: /opt/render/project/src/storage
+      sizeGB: 1
