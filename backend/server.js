@@ -65,6 +65,23 @@ app.get('/ping', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
+// ══ ROOT ══
+app.get('/', (req, res) => {
+  res.json({
+    name: 'VioletTunes Backend',
+    status: 'running',
+    version: '1.0.0',
+    endpoints: {
+      ping: '/ping',
+      tracks: '/api/tracks',
+      search: '/api/search?q=query',
+      recommendations: '/api/recommendations',
+      stream: '/stream/:id',
+      download: '/download/:id',
+    }
+  });
+});
+
 // ══ SELF-HOSTED MUSIC PLATFORM ROUTES ══
 app.use('/api/tracks', tracksRouter);
 app.use('/stream', tracksRouter); // /stream/:id handled by tracks router
