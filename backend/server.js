@@ -22,6 +22,7 @@ const bridgeConnections = new Map();
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static(require('path').join(__dirname, 'public')));
 
 let yt = null;
 

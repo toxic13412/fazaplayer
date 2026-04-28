@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VioletTunes Admin</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f13; color: #e2e8f0; min-height: 100vh; }
+  .header { background: linear-gradient(135deg, #7c3aed, #4f46e5); padding: 20px 32px; display: flex; align-items: center; gap: 12px; }
+  .header h1 { font-size: 22px; font-weight: 700; }
+  .header span { font-size: 13px; opacity: 0.8; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .card { background: #1a1a2e; border: 1px solid #2d2d44; border-radius: 12px; padding: 20px; }
+  .card h2 { font-size: 14px; font-weight: 600; color: #a78bfa; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 16px; }
+  .stat { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #2d2d44; }
+  .stat:last-child { border-bottom: none; }
+  .stat-label { color: #94a3b8; font-size: 13px; }
+  .stat-value { font-weight: 600; font-size: 15px; color: #e2e8f0; }
+  .stat-value.green { color: #22c55e; }
+  .stat-value.yellow { color: #f59e0b; }
+  .stat-value.red { color: #ef4444; }
+  input, select { width: 100%; background: #0f0f13; border: 1px solid #2d2d44; border-radius: 8px; padding: 10px 12px; color: #e2e8f0; font-size: 14px; margin-bottom: 10px; outline: none; transition: border-color .2s; }
+  input:focus, select:focus { border-color: #7c3aed; }
+  .btn { padding: 10px 18px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .2s; }
+  .btn-primary { background: #7c3aed; color: #fff; }
+  .btn-primary:hover { background: #6d28d9; }
+  .btn-danger { background: #ef4444; color: #fff; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-success { background: #22c55e; color: #fff; }
+  .btn-success:hover { background: #16a34a; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .track-list { max-height: 400px; overflow-y: auto; }
+  .track-item { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 8px; border-bottom: 1px solid #2d2d44; }
+  .track-item:hover { background: #2d2d44; }
+  .track-cover { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; background: #2d2d44; flex-shrink: 0; }
+  .track-info { flex: 1; min-width: 0; }
+  .track-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track-artist { font-size: 12px; color: #94a3b8; }
+  .track-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .artist-item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-radius: 8px; border-bottom: 1px solid #2d2d44; }
+  .artist-item:hover { background: #2d2d44; }
+  .artist-name { font-size: 14px; font-weight: 500; }
+  .artist-platforms { font-size: 12px; color: #94a3b8; }
+  .log-box { background: #0f0f13; border: 1px solid #2d2d44; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto; color: #94a3b8; }
+  .log-line { padding: 2px 0; }
+  .log-line.success { color: #22c55e; }
+  .log-line.error { color: #ef4444; }
+  .log-line.info { color: #60a5fa; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; color: #94a3b8; transition: all .2s; }
+  .tab.active { background: #7c3aed; color: #fff; }
+  .tab:hover:not(.active) { background: #2d2d44; color: #e2e8f0; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+  .badge-yt { background: #ef4444; color: #fff; }
+  .badge-vk { background: #2563eb; color: #fff; }
+  .badge-sp { background: #22c55e; color: #fff; }
+  .badge-sc { background: #f59e0b; color: #fff; }
+  .upload-area { border: 2px dashed #2d2d44; border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; transition: all .2s; }
+  .upload-area:hover, .upload-area.drag { border-color: #7c3aed; background: #1a1a2e; }
+  .upload-area p { color: #94a3b8; font-size: 14px; margin-top: 8px; }
+  .progress { height: 4px; background: #2d2d44; border-radius: 2px; overflow: hidden; margin-top: 8px; display: none; }
+  .progress-bar { height: 100%; background: #7c3aed; transition: width .3s; }
+  .empty { text-align: center; padding: 32px; color: #94a3b8; font-size: 14px; }
+  .checkbox-group { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+  .checkbox-label input[type=checkbox] { width: auto; margin: 0; }
+  .alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; display: none; }
+  .alert-success { background: #14532d; color: #86efac; border: 1px solid #22c55e; }
+  .alert-error { background: #450a0a; color: #fca5a5; border: 1px solid #ef4444; }
+  #authOverlay { position: fixed; inset: 0; background: #0f0f13; display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .auth-box { background: #1a1a2e; border: 1px solid #2d2d44; border-radius: 16px; padding: 32px; width: 360px; text-align: center; }
+  .auth-box h2 { font-size: 20px; margin-bottom: 8px; }
+  .auth-box p { color: #94a3b8; font-size: 13px; margin-bottom: 24px; }
+  .logo { font-size: 40px; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+
+<div id="authOverlay">
+  <div class="auth-box">
+    <div class="logo">🎵</div>
+    <h2>VioletTunes Admin</h2>
+    <p>Введи Admin Key для доступа</p>
+    <input type="password" id="authKey" placeholder="Admin Key" />
+    <button class="btn btn-primary" style="width:100%" onclick="doAuth()">Войти</button>
+    <div id="authError" class="alert alert-error" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="header">
+    <div class="status-dot" id="statusDot"></div>
+    <h1>🎵 VioletTunes Admin</h1>
+    <span id="serverUrl"></span>
+  </div>
+
+  <div class="container">
+
+    <!-- Stats -->
+    <div class="grid" id="statsGrid">
+      <div class="card">
+        <h2>📊 Статистика</h2>
+        <div class="stat"><span class="stat-label">Треков в базе</span><span class="stat-value green" id="statTracks">—</span></div>
+        <div class="stat"><span class="stat-label">Артистов</span><span class="stat-value" id="statArtists">—</span></div>
+        <div class="stat"><span class="stat-label">Статус сервера</span><span class="stat-value green" id="statStatus">—</span></div>
+        <div class="stat"><span class="stat-label">Импорт</span><span class="stat-value yellow" id="statImport">каждые 15 мин</span></div>
+      </div>
+      <div class="card">
+        <h2>⚡ Быстрые действия</h2>
+        <button class="btn btn-success" style="width:100%;margin-bottom:8px" onclick="runImport()">▶ Запустить импорт сейчас</button>
+        <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="loadTracks()">🔄 Обновить треки</button>
+        <button class="btn btn-primary" style="width:100%" onclick="loadArtists()">🔄 Обновить артистов</button>
+        <div id="importLog" class="log-box" style="margin-top:12px;display:none"></div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('tracks')">🎵 Треки</div>
+      <div class="tab" onclick="switchTab('artists')">🎤 Артисты</div>
+      <div class="tab" onclick="switchTab('upload')">⬆️ Загрузить</div>
+      <div class="tab" onclick="switchTab('search')">🔍 Поиск</div>
+    </div>
+
+    <!-- Tracks Tab -->
+    <div id="tab-tracks" class="tab-content active">
+      <div class="card">
+        <h2>🎵 Треки <span id="tracksCount" style="color:#94a3b8;font-weight:400"></span></h2>
+        <div id="tracksList" class="track-list"><div class="empty">Загрузка...</div></div>
+        <div style="display:flex;gap:8px;margin-top:12px;justify-content:center">
+          <button class="btn btn-primary btn-sm" id="btnPrevPage" onclick="changePage(-1)" disabled>← Назад</button>
+          <span id="pageInfo" style="font-size:13px;color:#94a3b8;padding:6px 12px"></span>
+          <button class="btn btn-primary btn-sm" id="btnNextPage" onclick="changePage(1)" disabled>Вперёд →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Artists Tab -->
+    <div id="tab-artists" class="tab-content">
+      <div class="card" style="margin-bottom:16px">
+        <h2>➕ Добавить артиста для авто-импорта</h2>
+        <div id="artistAlert" class="alert"></div>
+        <input type="text" id="artistName" placeholder="Имя артиста (например: Imagine Dragons)" />
+        <div class="checkbox-group">
+          <label class="checkbox-label"><input type="checkbox" value="youtube" checked> YouTube</label>
+          <label class="checkbox-label"><input type="checkbox" value="vk"> VK</label>
+          <label class="checkbox-label"><input type="checkbox" value="spotify"> Spotify</label>
+          <label class="checkbox-label"><input type="checkbox" value="soundcloud"> SoundCloud</label>
+          <label class="checkbox-label"><input type="checkbox" value="yandex"> Яндекс.Музыка</label>
+        </div>
+        <button class="btn btn-primary" onclick="addArtist()">Добавить артиста</button>
+      </div>
+      <div class="card">
+        <h2>🎤 Отслеживаемые артисты</h2>
+        <div id="artistsList"><div class="empty">Загрузка...</div></div>
+      </div>
+    </div>
+
+    <!-- Upload Tab -->
+    <div id="tab-upload" class="tab-content">
+      <div class="card">
+        <h2>⬆️ Загрузить MP3</h2>
+        <div id="uploadAlert" class="alert"></div>
+        <input type="text" id="uploadName" placeholder="Название трека" />
+        <input type="text" id="uploadArtist" placeholder="Исполнитель" />
+        <input type="text" id="uploadAlbum" placeholder="Альбом (необязательно)" />
+        <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+          <div style="font-size:32px">🎵</div>
+          <p>Нажми или перетащи MP3 файл сюда</p>
+          <p id="fileName" style="color:#7c3aed;margin-top:4px"></p>
+        </div>
+        <input type="file" id="fileInput" accept=".mp3,.aac,.flac,.wav,.ogg" style="display:none" onchange="onFileSelect(this)" />
+        <div class="progress" id="uploadProgress"><div class="progress-bar" id="uploadProgressBar"></div></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="uploadTrack()">Загрузить трек</button>
+      </div>
+    </div>
+
+    <!-- Search Tab -->
+    <div id="tab-search" class="tab-content">
+      <div class="card">
+        <h2>🔍 Поиск треков</h2>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="searchQuery" placeholder="Поиск по названию, исполнителю..." style="margin:0" onkeydown="if(event.key==='Enter')doSearch()" />
+          <button class="btn btn-primary" onclick="doSearch()">Найти</button>
+        </div>
+        <div id="searchResults" class="track-list" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let ADMIN_KEY = '';
+let BASE_URL = window.location.origin;
+let currentPage = 1;
+let totalPages = 1;
+
+// Auth
+function doAuth() {
+  const key = document.getElementById('authKey').value.trim();
+  if (!key) return;
+  ADMIN_KEY = key;
+  fetch(`${BASE_URL}/api/tracks`, { headers: { 'x-admin-key': key } })
+    .then(r => {
+      if (r.status === 401 || r.status === 403) throw new Error('Неверный ключ');
+      return r.json();
+    })
+    .then(() => {
+      document.getElementById('authOverlay').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      document.getElementById('serverUrl').textContent = BASE_URL;
+      init();
+    })
+    .catch(e => {
+      const el = document.getElementById('authError');
+      el.textContent = e.message;
+      el.style.display = 'block';
+    });
+}
+document.getElementById('authKey').addEventListener('keydown', e => { if (e.key === 'Enter') doAuth(); });
+
+function init() {
+  loadStats();
+  loadTracks();
+  loadArtists();
+}
+
+// Stats
+async function loadStats() {
+  try {
+    const [ping, tracks] = await Promise.all([
+      fetch(`${BASE_URL}/ping`).then(r => r.json()),
+      fetch(`${BASE_URL}/api/tracks`).then(r => r.json()),
+    ]);
+    document.getElementById('statStatus').textContent = '✅ Работает';
+    document.getElementById('statTracks').textContent = tracks.total || 0;
+  } catch(e) {
+    document.getElementById('statStatus').textContent = '❌ Ошибка';
+    document.getElementById('statusDot').style.background = '#ef4444';
+  }
+}
+
+// Tracks
+async function loadTracks(page = 1) {
+  currentPage = page;
+  const list = document.getElementById('tracksList');
+  list.innerHTML = '<div class="empty">Загрузка...</div>';
+  try {
+    const r = await fetch(`${BASE_URL}/api/tracks?page=${page}&limit=20`);
+    const data = await r.json();
+    totalPages = data.totalPages || 1;
+    document.getElementById('tracksCount').textContent = `(${data.total || 0})`;
+    document.getElementById('statTracks').textContent = data.total || 0;
+    document.getElementById('pageInfo').textContent = `${page} / ${totalPages}`;
+    document.getElementById('btnPrevPage').disabled = page <= 1;
+    document.getElementById('btnNextPage').disabled = page >= totalPages;
+    if (!data.tracks?.length) { list.innerHTML = '<div class="empty">Треков пока нет. Добавь артистов для авто-импорта!</div>'; return; }
+    list.innerHTML = data.tracks.map(t => `
+      <div class="track-item">
+        ${t.coverUrl ? `<img class="track-cover" src="${t.coverUrl}" onerror="this.style.display='none'" />` : '<div class="track-cover"></div>'}
+        <div class="track-info">
+          <div class="track-name">${t.name}</div>
+          <div class="track-artist">${t.artist}${t.album ? ' · ' + t.album : ''}</div>
+        </div>
+        <div class="track-actions">
+          <a href="${BASE_URL}/download/${t.id}" class="btn btn-primary btn-sm" download>⬇</a>
+          <button class="btn btn-danger btn-sm" onclick="deleteTrack('${t.id}')">🗑</button>
+        </div>
+      </div>`).join('');
+  } catch(e) { list.innerHTML = '<div class="empty">Ошибка загрузки</div>'; }
+}
+
+function changePage(dir) { loadTracks(currentPage + dir); }
+
+async function deleteTrack(id) {
+  if (!confirm('Удалить трек?')) return;
+  await fetch(`${BASE_URL}/api/tracks/${id}`, { method: 'DELETE', headers: { 'x-admin-key': ADMIN_KEY } });
+  loadTracks(currentPage);
+  loadStats();
+}
+
+// Artists
+async function loadArtists() {
+  const list = document.getElementById('artistsList');
+  try {
+    const r = await fetch(`${BASE_URL}/admin/watched-artists`, { headers: { 'x-admin-key': ADMIN_KEY } });
+    const data = await r.json();
+    document.getElementById('statArtists').textContent = data.artists?.length || 0;
+    if (!data.artists?.length) { list.innerHTML = '<div class="empty">Нет отслеживаемых артистов. Добавь выше!</div>'; return; }
+    list.innerHTML = data.artists.map(a => `
+      <div class="artist-item">
+        <div>
+          <div class="artist-name">🎤 ${a.artistName}</div>
+          <div class="artist-platforms">${(a.platforms || []).join(', ')}</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="deleteArtist(${a.id})">Удалить</button>
+      </div>`).join('');
+  } catch(e) { list.innerHTML = '<div class="empty">Ошибка загрузки</div>'; }
+}
+
+async function addArtist() {
+  const name = document.getElementById('artistName').value.trim();
+  if (!name) return;
+  const platforms = [...document.querySelectorAll('.checkbox-group input:checked')].map(c => c.value);
+  if (!platforms.length) { showAlert('artistAlert', 'Выбери хотя бы одну платформу', 'error'); return; }
+  try {
+    const r = await fetch(`${BASE_URL}/api/import/watch-artist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+      body: JSON.stringify({ artistName: name, platforms })
+    });
+    const data = await r.json();
+    if (data.success || data.artistId) {
+      showAlert('artistAlert', `✅ Артист "${name}" добавлен!`, 'success');
+      document.getElementById('artistName').value = '';
+      loadArtists();
+    } else {
+      showAlert('artistAlert', data.error || 'Ошибка', 'error');
+    }
+  } catch(e) { showAlert('artistAlert', 'Ошибка соединения', 'error'); }
+}
+
+async function deleteArtist(id) {
+  if (!confirm('Удалить артиста?')) return;
+  await fetch(`${BASE_URL}/admin/watched-artists/${id}`, { method: 'DELETE', headers: { 'x-admin-key': ADMIN_KEY } });
+  loadArtists();
+}
+
+// Import
+async function runImport() {
+  const log = document.getElementById('importLog');
+  log.style.display = 'block';
+  log.innerHTML = '<div class="log-line info">⏳ Запускаю импорт...</div>';
+  try {
+    const r = await fetch(`${BASE_URL}/api/import/run-now`, { method: 'POST', headers: { 'x-admin-key': ADMIN_KEY } });
+    const data = await r.json();
+    log.innerHTML += `<div class="log-line success">✅ ${JSON.stringify(data)}</div>`;
+    setTimeout(() => { loadTracks(); loadStats(); }, 3000);
+  } catch(e) {
+    log.innerHTML += `<div class="log-line error">❌ ${e.message}</div>`;
+  }
+}
+
+// Upload
+function onFileSelect(input) {
+  const file = input.files[0];
+  if (file) document.getElementById('fileName').textContent = file.name;
+}
+
+const uploadArea = document.getElementById('uploadArea');
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('drag'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault(); uploadArea.classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) { document.getElementById('fileInput').files = e.dataTransfer.files; document.getElementById('fileName').textContent = file.name; }
+});
+
+async function uploadTrack() {
+  const file = document.getElementById('fileInput').files[0];
+  const name = document.getElementById('uploadName').value.trim();
+  const artist = document.getElementById('uploadArtist').value.trim();
+  if (!file) { showAlert('uploadAlert', 'Выбери файл', 'error'); return; }
+  if (!name || !artist) { showAlert('uploadAlert', 'Заполни название и исполнителя', 'error'); return; }
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('metadata', JSON.stringify({ name, artist, album: document.getElementById('uploadAlbum').value.trim() }));
+  const progress = document.getElementById('uploadProgress');
+  const bar = document.getElementById('uploadProgressBar');
+  progress.style.display = 'block'; bar.style.width = '0%';
+  try {
+    const xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = e => { if (e.lengthComputable) bar.style.width = (e.loaded/e.total*100) + '%'; };
+    xhr.onload = () => {
+      const data = JSON.parse(xhr.responseText);
+      if (data.id || data.success) {
+        showAlert('uploadAlert', '✅ Трек загружен!', 'success');
+        document.getElementById('uploadName').value = '';
+        document.getElementById('uploadArtist').value = '';
+        document.getElementById('uploadAlbum').value = '';
+        document.getElementById('fileName').textContent = '';
+        document.getElementById('fileInput').value = '';
+        progress.style.display = 'none';
+        loadTracks(); loadStats();
+      } else {
+        showAlert('uploadAlert', data.error || 'Ошибка загрузки', 'error');
+        progress.style.display = 'none';
+      }
+    };
+    xhr.onerror = () => { showAlert('uploadAlert', 'Ошибка соединения', 'error'); progress.style.display = 'none'; };
+    xhr.open('POST', `${BASE_URL}/admin/upload`);
+    xhr.setRequestHeader('x-admin-key', ADMIN_KEY);
+    xhr.send(formData);
+  } catch(e) { showAlert('uploadAlert', e.message, 'error'); progress.style.display = 'none'; }
+}
+
+// Search
+async function doSearch() {
+  const q = document.getElementById('searchQuery').value.trim();
+  if (!q) return;
+  const results = document.getElementById('searchResults');
+  results.innerHTML = '<div class="empty">Поиск...</div>';
+  try {
+    const r = await fetch(`${BASE_URL}/api/search?q=${encodeURIComponent(q)}&limit=20`);
+    const data = await r.json();
+    if (!data.tracks?.length) { results.innerHTML = '<div class="empty">Ничего не найдено</div>'; return; }
+    results.innerHTML = data.tracks.map(t => `
+      <div class="track-item">
+        ${t.coverUrl ? `<img class="track-cover" src="${t.coverUrl}" onerror="this.style.display='none'" />` : '<div class="track-cover"></div>'}
+        <div class="track-info">
+          <div class="track-name">${t.name}</div>
+          <div class="track-artist">${t.artist}</div>
+        </div>
+        <a href="${BASE_URL}/download/${t.id}" class="btn btn-primary btn-sm" download>⬇</a>
+      </div>`).join('');
+  } catch(e) { results.innerHTML = '<div class="empty">Ошибка поиска</div>'; }
+}
+
+// Tabs
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', t.textContent.toLowerCase().includes(name) || (name==='tracks'&&i===0)));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// Alert helper
+function showAlert(id, msg, type) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = `alert alert-${type}`;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 4000);
+}
+</script>
+</body>
+</html>

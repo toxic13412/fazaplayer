@@ -135,6 +135,78 @@ router.post('/tracks', requireAdminKey, (req, res) => {
   });
 });
 
+// GET /admin/watched-artists - List all watched artists
+router.get('/watched-artists', requireAdminKey, (req, res) => {
+  try {
+    const db = getDb();
+    const artists = db.prepare(`
+      SELECT wa.id, wa.name as artistName,
+        GROUP_CONCAT(wap.platform) as platformsStr
+      FROM watched_artists wa
+      LEFT JOIN watched_artist_platforms wap ON wa.id = wap.artist_id
+      GROUP BY wa.id
+    `).all();
+
+    res.json({
+      artists: artists.map(a => ({
+        id: a.id,
+        artistName: a.artistName,
+        platforms: a.platformsStr ? a.platformsStr.split(',') : []
+      }))
+    });
+  } catch (error) {
+    console.error('Error listing watched artists:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /admin/upload - Upload track (alias with simpler metadata format)
+router.post('/upload', requireAdminKey, (req, res) => {
+  const uploadMiddleware = multer({
+    storage,
+    limits: { fileSize: 100 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => cb(null, true)
+  }).single('file');
+
+  uploadMiddleware(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    try {
+      let metadata = {};
+      try { metadata = JSON.parse(req.body.metadata || '{}'); } catch(_) {}
+      const name = metadata.name || req.body.name || 'Unknown';
+      const artist = metadata.artist || req.body.artist || 'Unknown';
+      const album = metadata.album || req.body.album || null;
+
+      if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+      const trackId = uuidv4();
+      const track = {
+        id: trackId,
+        title: name,
+        artist,
+        album,
+        genre: null,
+        durationSeconds: 0,
+        coverUrl: null,
+        lyrics: null,
+        filePath: `storage/tracks/${req.file.filename}`,
+        fileSizeBytes: req.file.size,
+        mimeType: req.file.mimetype,
+        source: 'upload',
+        sourceUrl: null,
+        uploadedAt: new Date().toISOString(),
+        importedAt: null,
+        playCount: 0
+      };
+      insertTrack(track);
+      res.status(201).json({ id: trackId, name, artist, success: true });
+    } catch (error) {
+      console.error('Upload error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+});
+
 // POST /admin/watched-artists - Add artist to watch list
 router.post('/watched-artists', requireAdminKey, (req, res) => {
   try {
